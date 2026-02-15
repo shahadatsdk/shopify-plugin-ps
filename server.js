@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const { join } = require('path');
 const { v4: uuidv4 } = require('uuid');
-const { SApp, BillingInterval } = require('@shopify/shopify-app-express');
+const { shopifyApp, BillingInterval } = require('@shopify/shopify-app-express');
 const { restResources } = require("@shopify/admin-api-client");
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Initialize Shopify app
-const sAppInstance = SApp({
+const sAppInstance = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
   apiSecretKey: process.env.SHOPIFY_API_SECRET,
   scopes: ['read_products', 'write_products', 'read_orders', 'write_orders', 'read_payments', 'write_payments'],
@@ -29,9 +29,6 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
-
-// Use Shopify middleware for authentication
-app.use(sAppInstance.authenticate.public());
 
 // Add basic CORS and security headers
 app.use((req, res, next) => {
@@ -64,7 +61,7 @@ app.get('/auth/callback', async (req, res, next) => {
 
 // App route
 app.get('/app', async (req, res, next) => {
-  const shop = req.query.shop;
+  const shop = req.query.shop || req.query.domain;
   
   // Read the template file and replace placeholders
   let template = fs.readFileSync(path.join(__dirname, 'templates', 'index.html'), 'utf8');
@@ -76,9 +73,11 @@ app.get('/app', async (req, res, next) => {
 });
 
 // Endpoint to save settings
-app.post('/save-settings', sAppInstance.authenticate.webhook(), async (req, res) => {
+app.post('/save-settings', async (req, res) => {
   try {
-    const { shop } = req;
+    // Extract session information from the Shopify session
+    const session = res.locals.session || req.body.session;
+    const shop = session?.shop || req.body.shop || req.headers['x-shopify-shop-domain'];
     
     if (!shop) {
       return res.status(401).json({ success: false, error: 'Unauthorized' });
@@ -96,33 +95,39 @@ app.post('/save-settings', sAppInstance.authenticate.webhook(), async (req, res)
 });
 
 // Webhook endpoint for order creation
-app.post('/webhooks/orders/create', sAppInstance.authenticate.webhook(), async (req, res) => {
-  console.log('Received order webhook:', req.body);
+app.post('/webhooks/orders/create', async (req, res) => {
+  // Verify webhook using Shopify's verification
+  const shop = req.headers['x-shopify-shop-domain'];
+  const hmac = req.headers['x-shopify-hmac-sha256'];
+
+  if (!shop || !hmac) {
+    return res.status(401).send('Unauthorized');
+  }
+
+  console.log('Received order webhook for shop:', shop, req.body);
   res.status(200).send('OK');
 });
 
 // Payment processing endpoint
-app.post('/process-payment', sAppInstance.authenticate.public(), async (req, res) => {
+app.post('/process-payment', async (req, res) => {
   try {
     const { shop, cart, orderId, amount, currency } = req.body;
-    const { sessionToken, shop: authenticatedShop } = res.locals;
+    const session = res.locals.session;
     
-    if (!authenticatedShop) {
+    if (!shop || !session) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     
     // In a real implementation, you would retrieve stored settings from your database
     // For now, using defaults
-    const session = { 
-      id: 'mock-session-id', 
-      shopDomain: authenticatedShop, 
+    const settings = { 
       merchant_id: process.env.DEFAULT_MERCHANT_ID || 'test-merchant', 
       password: process.env.DEFAULT_PASSWORD || 'test-password', 
       charge_for_customer: '1', 
       emi: '0' 
     };
     
-    if (!session) {
+    if (!settings) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -130,7 +135,7 @@ app.post('/process-payment', sAppInstance.authenticate.public(), async (req, res
     const { processPayment, generateInvoiceNumber, validateEMIAmount } = require('./paystation-process');
     
     // Validate EMI amount if EMI is enabled
-    const emiEnabled = session.emi === '1';
+    const emiEnabled = settings.emi === '1';
     const validation = validateEMIAmount(amount, emiEnabled);
     
     if (!validation.valid) {
@@ -160,10 +165,10 @@ app.post('/process-payment', sAppInstance.authenticate.public(), async (req, res
       reference: 'Shopify-App',
       callback_url: `${process.env.HOST}/handle-callback?shop=${shop}`,
       checkout_items: 'items',
-      pay_with_charge: session.charge_for_customer || '1',
-      emi: session.emi || '0',
-      merchantId: session.merchant_id,
-      password: session.password
+      pay_with_charge: settings.charge_for_customer || '1',
+      emi: settings.emi || '0',
+      merchantId: settings.merchant_id,
+      password: settings.password
     };
 
     // Process payment with PayStation
@@ -225,7 +230,7 @@ app.get('/handle-callback', async (req, res) => {
 });
 
 // Payment provider registration endpoint (Shopify uses this to register payment methods)
-app.post('/payment-provider', sAppInstance.authenticate.public(), async (req, res) => {
+app.post('/payment-provider', async (req, res) => {
   // This endpoint would be used by Shopify to register the payment method
   res.json({
     name: 'PayStation',

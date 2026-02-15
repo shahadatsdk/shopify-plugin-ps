@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "build": "node server.js",
     "dev": "nodemon server.js",
     "tunnel": "node server.js & lt --port 3000"
   },
@@ -17,10 +18,10 @@
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
-    "localtunnel": "^2.0.2",
+    "localtunnel": "^1.8.3",
     "request": "^2.88.2"
   },
   "devDependencies": {
-    "nodemon": "^2.0.20"
+    "nodemon": "^3.1.11"
   }
 }
