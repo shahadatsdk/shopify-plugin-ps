@@ -1,0 +1,22 @@
+# This file configures your app's metadata for the Shopify Partner Dashboard
+# Learn more about this file here: https://shopify.dev/docs/apps/configuration/app-bridge
+
+client_id = "d47e2e07b5999a37dd2c84e66172fd2f" # Replace with your app's API key
+name = "PayStation Payment Gateway"
+handle = "paystation-gateway"
+application_url = "https://your-tunnel-subdomain.loca.lt"
+embedded = true
+
+[access_scopes]
+# Learn more about configuring access scopes here: https://shopify.dev/docs/apps/managing-permissions/access-scopes
+scopes = "read_products,write_products,read_orders,write_orders,read_payments,write_payments"
+
+[auth]
+redirect_urls = [
+  "https://your-tunnel-subdomain.loca.lt/auth/callback"
+]
+
+[webhooks]
+api_version = "2023-04"
+
+[extensions]

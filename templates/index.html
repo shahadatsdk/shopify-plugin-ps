@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>PayStation Payment Gateway Settings</title>
+    <meta charset="utf-8">
+    <script src="https://cdn.shopify.com/s/assets/external/app.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+      h1 {
+        color: #3d3d3d;
+        border-bottom: 2px solid #4768ff;
+        padding-bottom: 10px;
+      }
+      .form-group {
+        margin-bottom: 20px;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+        color: #555;
+      }
+      input[type="text"],
+      input[type="password"],
+      select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+      }
+      button {
+        background-color: #4768ff;
+        color: white;
+        padding: 12px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      button:hover {
+        background-color: #3a56e0;
+      }
+      .info-text {
+        background-color: #e8f4ff;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>PayStation Payment Gateway Settings</h1>
+      
+      <div class="info-text">
+        <p><strong>Note:</strong> Configure your PayStation merchant credentials to enable payment processing.</p>
+      </div>
+      
+      <form id="settings-form">
+        <div class="form-group">
+          <label for="merchant_id">Merchant ID:</label>
+          <input type="text" id="merchant_id" name="merchant_id" placeholder="Enter your PayStation Merchant ID" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="password">API Password:</label>
+          <input type="password" id="password" name="password" placeholder="Enter your PayStation API Password" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="charge_for_customer">Transaction Charge:</label>
+          <select id="charge_for_customer" name="charge_for_customer">
+            <option value="1">Pay With Charge (Customer pays)</option>
+            <option value="0">Pay Without Charge (Merchant pays)</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="emi">Enable EMI (Easy Monthly Installment):</label>
+          <select id="emi" name="emi">
+            <option value="0">No</option>
+            <option value="1">Yes</option>
+          </select>
+          <small>Minimum amount should be 5000 BDT for EMI</small>
+        </div>
+        
+        <div class="form-group">
+          <label for="fail_url">Fail/Cancel URL:</label>
+          <input type="text" id="fail_url" name="fail_url" placeholder="https://your-shop.myshopify.com/cart" value="https://{{ shop.domain }}/cart">
+        </div>
+        
+        <button type="submit">Save Settings</button>
+      </form>
+    </div>
+
+    <script>
+      // Initialize Shopify App Bridge
+      sAppInstance.init({
+        apiKey: '{{ api_key }}',
+        shopOrigin: 'https://{{ shop.permanent_domain }}'
+      });
+
+      document.getElementById('settings-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Get form data
+        const formData = {
+          merchant_id: document.getElementById('merchant_id').value,
+          password: document.getElementById('password').value,
+          charge_for_customer: document.getElementById('charge_for_customer').value,
+          emi: document.getElementById('emi').value,
+          fail_url: document.getElementById('fail_url').value
+        };
+        
+        // Save settings to server
+        fetch('/save-settings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(formData)
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            sAppInstance.Bar.initialize({
+              title: 'PayStation Settings',
+            }).flashNotice('Settings saved successfully!');
+          } else {
+            sAppInstance.Bar.initialize({
+              title: 'PayStation Settings',
+            }).flashError('Failed to save settings: ' + data.error);
+          }
+        })
+        .catch(error => {
+          sAppInstance.Bar.initialize({
+            title: 'PayStation Settings',
+          }).flashError('An error occurred while saving settings.');
+        });
+      });
+    </script>
+  </body>
+</html>

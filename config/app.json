@@ -1,0 +1,25 @@
+{
+  "name": "PayStation Payment Gateway",
+  "handle": "paystation-gateway",
+  "description": "Accept payments through PayStation in your Shopify store.",
+  "version": "1.0.0",
+  "auth": {
+    "callback_url": "/auth/callback"
+  },
+  "webhooks": {
+    "api_version": "2023-04",
+    "subscriptions": [
+      {
+        "topic": "orders/create",
+        "uri": "/webhooks/orders/create"
+      }
+    ]
+  },
+  "payment_provider": {
+    "name": "PayStation",
+    "handle": "paystation",
+    "type": "offsite",
+    "callback_url": "/process-payment",
+    "configurable": true
+  }
+}
