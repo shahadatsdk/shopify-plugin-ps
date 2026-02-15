@@ -11,11 +11,11 @@ const path = require('path');
 
 // Initialize Shopify app
 const sAppInstance = SApp({
-  apiKey: '',
-  apiSecretKey: '',
+  apiKey: process.env.SHOPIFY_API_KEY,
+  apiSecretKey: process.env.SHOPIFY_API_SECRET,
   scopes: ['read_products', 'write_products', 'read_orders', 'write_orders', 'read_payments', 'write_payments'],
   hostName: process.env.HOST,
-  hostScheme: 'http',
+  hostScheme: process.env.HOST_SCHEME || 'http',
   apiVersion: '2023-04',
   isEmbeddedApp: true,
   billing: {
@@ -30,8 +30,8 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
-// Temporarily disable Shopify middleware for local testing
-// app.use(sAppInstance.verifyRequest());
+// Use Shopify middleware for authentication
+app.use(sAppInstance.authenticate.public());
 
 // Add basic CORS and security headers
 app.use((req, res, next) => {
@@ -65,38 +65,28 @@ app.get('/auth/callback', async (req, res, next) => {
 // App route
 app.get('/app', async (req, res, next) => {
   const shop = req.query.shop;
-  // Mock session for local testing
-  const session = { id: 'mock-session-id', shopDomain: shop };
-
+  
   // Read the template file and replace placeholders
   let template = fs.readFileSync(path.join(__dirname, 'templates', 'index.html'), 'utf8');
-  template = template.replace('{{ api_key }}', process.env.SHOPIFY_API_KEY);
-  template = template.replace('{{ shop.permanent_domain }}', shop);
-  template = template.replace('{{ shop.domain }}', shop.replace('.myshopify.com', ''));
+  template = template.replace('{{ api_key }}', process.env.SHOPIFY_API_KEY || '');
+  template = template.replace('{{ shop.permanent_domain }}', shop || '');
+  template = template.replace('{{ shop.domain }}', (shop || '').replace('.myshopify.com', ''));
 
   res.send(template);
 });
 
 // Endpoint to save settings
-app.post('/save-settings', async (req, res) => {
+app.post('/save-settings', sAppInstance.authenticate.webhook(), async (req, res) => {
   try {
-    // Mock session for local testing
-    const session = { id: 'mock-session-id', shopDomain: req.headers.shop || 'test-shop.myshopify.com' };
+    const { shop } = req;
     
-    if (!session) {
+    if (!shop) {
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
     
     // In a real implementation, you would save these settings to your database
     // For now, we'll just return success
-    console.log('Saving settings:', req.body);
-    
-    // Update session with new settings
-    session.merchant_id = req.body.merchant_id;
-    session.password = req.body.password;
-    session.charge_for_customer = req.body.charge_for_customer;
-    session.emi = req.body.emi;
-    session.fail_url = req.body.fail_url;
+    console.log('Saving settings for shop:', shop, req.body);
     
     res.json({ success: true });
   } catch (error) {
@@ -106,19 +96,31 @@ app.post('/save-settings', async (req, res) => {
 });
 
 // Webhook endpoint for order creation
-app.post('/webhooks/orders/create', async (req, res) => {
+app.post('/webhooks/orders/create', sAppInstance.authenticate.webhook(), async (req, res) => {
   console.log('Received order webhook:', req.body);
   res.status(200).send('OK');
 });
 
 // Payment processing endpoint
-app.post('/process-payment', async (req, res) => {
+app.post('/process-payment', sAppInstance.authenticate.public(), async (req, res) => {
   try {
     const { shop, cart, orderId, amount, currency } = req.body;
+    const { sessionToken, shop: authenticatedShop } = res.locals;
     
-    // Get shop session to retrieve stored settings
-    // Mock session for local testing
-    const session = { id: 'mock-session-id', shopDomain: req.body.shop || 'test-shop.myshopify.com', merchant_id: 'test-merchant', password: 'test-password', charge_for_customer: '1', emi: '0' };
+    if (!authenticatedShop) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    // In a real implementation, you would retrieve stored settings from your database
+    // For now, using defaults
+    const session = { 
+      id: 'mock-session-id', 
+      shopDomain: authenticatedShop, 
+      merchant_id: process.env.DEFAULT_MERCHANT_ID || 'test-merchant', 
+      password: process.env.DEFAULT_PASSWORD || 'test-password', 
+      charge_for_customer: '1', 
+      emi: '0' 
+    };
     
     if (!session) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -223,7 +225,7 @@ app.get('/handle-callback', async (req, res) => {
 });
 
 // Payment provider registration endpoint (Shopify uses this to register payment methods)
-app.post('/payment-provider', async (req, res) => {
+app.post('/payment-provider', sAppInstance.authenticate.public(), async (req, res) => {
   // This endpoint would be used by Shopify to register the payment method
   res.json({
     name: 'PayStation',
