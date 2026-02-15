@@ -5,8 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "build": "node server.js",
+    "build": "node build.js",
     "dev": "nodemon server.js",
+    "vercel-build": "echo 'Building for Vercel'",
     "tunnel": "node server.js & lt --port 3000"
   },
   "dependencies": {
